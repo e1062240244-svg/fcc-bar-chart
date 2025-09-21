@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FreeCodeCamp - Bar Chart (GDP)</title>
+  <style>
+    /* Basic layout + styles for the chart and tooltip */
+    :root{ --bg:#0f1724; --card:#0b1220; --accent:#60a5fa; --muted:#94a3b8; }
+    html,body{ height:100%; margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background: linear-gradient(180deg,#071226 0%, #07192a 100%); color:#e6eef8; }
+    .container{ max-width:1100px; margin:32px auto; padding:20px; }
+
+    header{ text-align:center; margin-bottom:18px; }
+    #title{ font-size:20px; margin:0 0 6px 0; }
+    #description{ margin:0; color:var(--muted); font-size:13px; }
+
+    .chart-card{ background: rgba(255,255,255,0.02); border-radius:8px; padding:18px; box-shadow: 0 6px 18px rgba(2,6,23,0.6); }
+    #chart{ position:relative; }
+
+    svg{ display:block; margin: 12px auto; }
+
+    .bar{ fill: var(--accent); }
+    .bar:hover{ fill: #9ad0ff; }
+
+    #tooltip{
+      position:absolute;
+      pointer-events:none;
+      padding:8px 10px;
+      border-radius:4px;
+      background:rgba(2,6,23,0.95);
+      border:1px solid rgba(255,255,255,0.06);
+      color:#e6eef8;
+      font-size:12px;
+      box-shadow:0 6px 20px rgba(2,6,23,0.6);
+      opacity:0;
+      transition: opacity 120ms ease;
+      z-index:50;
+      min-width:120px;
+    }
+
+    /* Responsive */
+    @media (max-width:720px){
+      .container{ padding:8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <!-- Required by tests: id="title" -->
+      <h1 id="title">United States GDP (Quarterly)</h1>
+      <p id="description">A bar chart built with D3 — dataset: GDP per quarter (freeCodeCamp project).</p>
+    </header>
+
+    <main class="chart-card">
+      <div id="chart">
+        <!-- SVG will be appended here by the script -->
+        <!-- Tooltip element required by tests: id="tooltip" -->
+        <div id="tooltip" role="tooltip" aria-hidden="true"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- D3 library -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <!-- Main script: fetch data, draw chart, add axes and tooltip -->
+  <script>
+  // Wrap in an IIFE so variables don't leak to global scope
+  (function(){
+    const DATA_URL = 'https://raw.githubusercontent.com/freeCodeCamp/ProjectReferenceData/master/GDP-data.json';
+
+    // Chart dimensions
+    const margin = { top: 40, right: 20, bottom: 60, left: 80 };
+    const svgWidth = 1000;
+    const svgHeight = 500;
+    const width = svgWidth - margin.left - margin.right;
+    const height = svgHeight - margin.top - margin.bottom;
+
+    // Create SVG
+    const svg = d3.select('#chart')
+      .append('svg')
+      .attr('width', svgWidth)
+      .attr('height', svgHeight)
+      .attr('viewBox', `0 0 ${svgWidth} ${svgHeight}`)
+      .append('g')
+      .attr('transform', `translate(${margin.left}, ${margin.top})`);
+
+    // Tooltip selection (exists in DOM already)
+    const tooltip = d3.select('#tooltip');
+
+    // Fetch data and build chart
+    fetch(DATA_URL)
+      .then(res => res.json())
+      .then(json => {
+        const dataset = json.data; // array: [ ["1947-01-01", 243.1], ... ]
+
+        // Parse dates and GDP values for scales
+        const dates = dataset.map(d => new Date(d[0]));
+        const gdps = dataset.map(d => d[1]);
+
+        // Scales
+        const xScale = d3.scaleTime()
+          .domain([d3.min(dates), d3.max(dates)])
+          .range([0, width]);
+
+        const yScale = d3.scaleLinear()
+          .domain([0, d3.max(gdps)])
+          .range([height, 0]);
+
+        // Axes (required: g elements with id="x-axis" and id="y-axis")
+        const xAxis = d3.axisBottom(xScale);
+        const yAxis = d3.axisLeft(yScale);
+
+        svg.append('g')
+          .attr('id', 'x-axis')
+          .attr('transform', `translate(0, ${height})`)
+          .call(xAxis);
+
+        svg.append('g')
+          .attr('id', 'y-axis')
+          .call(yAxis);
+
+        // Bars: a rect per data point. Tests require class="bar" and data attributes data-date and data-gdp
+        const barWidth = width / dataset.length;
+
+        svg.selectAll('.bar')
+          .data(dataset)
+          .enter()
+          .append('rect')
+          .attr('class', 'bar')
+          // store original date string and gdp number as attributes (tests check these exact values and order)
+          .attr('data-date', d => d[0])
+          .attr('data-gdp', d => d[1])
+          // position and size
+          .attr('x', d => xScale(new Date(d[0])))
+          .attr('y', d => yScale(d[1]))
+          .attr('width', Math.ceil(barWidth))
+          .attr('height', d => height - yScale(d[1]))
+          // tooltip interactions
+          .on('mouseover', function(event,d){
+            // position tooltip near mouse, set data-date required by tests
+            tooltip
+              .style('left', (event.pageX + 12) + 'px')
+              .style('top', (event.pageY - 28) + 'px')
+              .style('opacity', 1)
+              .attr('data-date', d[0])
+              .html(`<strong>${d[0]}</strong><br/>$${d[1]} Billion`);
+            tooltip.attr('aria-hidden', 'false');
+
+            // highlight bar for clarity
+            d3.select(this).attr('fill-opacity', 0.85);
+          })
+          .on('mouseout', function(){
+            tooltip.style('opacity', 0).attr('aria-hidden', 'true');
+            d3.select(this).attr('fill-opacity', 1);
+          });
+
+        // Optional: Y axis label
+        svg.append('text')
+          .attr('transform', 'rotate(-90)')
+          .attr('x', -height/2)
+          .attr('y', -margin.left + 18)
+          .attr('text-anchor', 'middle')
+          .style('font-size', '12px')
+          .style('fill', '#cbd5e1')
+          .text('Gross Domestic Product (Billions of USD)');
+
+      })
+      .catch(err => {
+        console.error('Error loading the dataset:', err);
+        d3.select('#chart').append('p').text('Failed to load data. Open console for details.');
+      });
+  })();
+  </script>
+
+  <!-- FreeCodeCamp test script: include after the chart script so tests run when page loads -->
+  <script src="https://cdn.freecodecamp.org/testable-projects-fcc/v1/bundle.js"></script>
+</body>
+</html>
